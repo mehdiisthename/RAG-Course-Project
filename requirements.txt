@@ -1,0 +1,8 @@
+pandas
+numpy
+sentence-transformers
+faiss-cpu
+tqdm
+jupyterlab
+groq
+rank-bm25
