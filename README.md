@@ -17,7 +17,7 @@ Key features:
 
 ## Dataset
 
-- **Source**: [Persian News Dataset on Kaggle](https://www.kaggle.com/datasets/... ) (approximately 390k articles from 2021–2023).
+- **Source**: [Persian News Dataset on Kaggle](https://www.kaggle.com/datasets/amirzenoozi/persian-news-dataset/) (approximately 390k articles from 2021–2023).
 - **Subset**: Randomly sampled 20,000 articles for feasible experimentation → saved as `news_subset.csv`.
 - Articles include title, body, abstract, tags, category, date, and agency.
 
