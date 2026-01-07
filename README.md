@@ -1,144 +1,117 @@
-# پیاده‌سازی RAG روی مجموعه‌داده Persian News – نسخه ساده
+# Persian News RAG Project
 
-این ریپو یک نسخه‌ی **بسیار ساده و مینیمال** از مینی‌پروژه‌ی RAG روی دیتاست خبری فارسی است.  
-هدف این است که افراد با حداقل آشنایی بتواند با دنبال‌کردن چند مرحله‌ی واضح، یک سیستم RAG خیلی ساده بسازند.
+A **Retrieval-Augmented Generation (RAG)** system built for answering questions based on a dataset of Persian news articles from major Iranian news agencies (FarsNews, MehrNews, ISNA, and others).
 
-> ⚠️ مهم: در این ریپو **هیچ کد آماده‌ای وجود ندارد**.  
-> شما باید تمام سلول‌های `TODO` در نوت‌بوک‌ها را خودتان کامل کنید.
+## Overview
 
----
+This project implements a baseline RAG pipeline to retrieve relevant news documents and generate accurate, context-based answers in Persian. It combines **lexical** and **semantic** retrieval methods with a large language model (LLM) for response generation.
 
-## ۱. پیش‌نیازها
+The system processes a large Persian news dataset, cleans and chunks the articles, indexes them for fast retrieval, and uses an LLM to produce concise Persian answers grounded in the retrieved context.
 
-۱.۱ داشتن Python ۳.۹ یا بالاتر
+Key features:
+- Persian text normalization (handling Arabic-Persian character differences, diacritics, digits).
+- Chunking of long articles for efficient embedding.
+- Three retrieval strategies: BM25 (lexical), dense embeddings (semantic), and hybrid.
+- Answer generation via Groq API (Llama-3.1-8B).
+- Evaluation on 15 hand-crafted questions with ground-truth references.
 
-۲.۱ دسترسی به اینترنت برای دانلود:
+## Dataset
 
-  - دیتاست از Kaggle (Persian News Dataset)
-  - مدل‌های Embedding از Hugging Face
+- **Source**: [Persian News Dataset on Kaggle](https://www.kaggle.com/datasets/... ) (approximately 390k articles from 2021–2023).
+- **Subset**: Randomly sampled 20,000 articles for feasible experimentation → saved as `news_subset.csv`.
+- Articles include title, body, abstract, tags, category, date, and agency.
 
-۳.۱ آشنایی بسیار مقدماتی با:
+## Project Structure
 
-  - فریم‌ورک`pandas`
-  - یک کتابخانه‌ی Embedding مثل  `sentence-transformers` 
-  - پایگاه برداری FAISS (برای جست‌وجوی برداری)
-
----
-
-
-## ۲. نصب
-
-```bash
-git clone https://github.com/ke6nk/rag-persian-news-lite.git
-cd rag-persian-news-lite
-
-python -m venv .venv
-source .venv/bin/activate  # در ویندوز: .venv\Scripts\activate
-
-pip install --upgrade pip
-pip install -r requirements.txt
+```
+.
+├── rag-project-notebook-1.ipynb      # Data preprocessing & subset creation
+├── rag-project-notebook-2.ipynb      # RAG pipeline, retrieval, generation & evaluation
+├── news_subset.csv                   # Processed 20k article subset
+├── test_results.json                 # Evaluation results on 15 questions
+└── README.md                         # This file
 ```
 
----
+## Dependencies
 
-## ۳. مراحل کار (۳ نوت‌بوک)
+- Python 3.x
+- pandas
+- numpy
+- sentence-transformers (paraphrase-multilingual-MiniLM-L12-v2)
+- faiss-cpu
+- rank-bm25
+- groq (for LLM inference)
 
-### قدم اول: آماده‌سازی داده
+Install with:
 
-نوت‌بوک: `notebooks/01_prepare_data.ipynb`
+```bash
+pip install pandas numpy sentence-transformers faiss-cpu rank-bm25 groq
+```
 
-در این نوت‌بوک باید:
+## How It Works
 
--- فایل CSV دیتاست **Persian News Dataset** را از Kaggle دانلود کنید و در `data/raw/` قرار دهید.
+1. **Preprocessing** (`notebook-1`):
+   - Load raw CSV.
+   - Drop rows without body text.
+   - Normalize Persian text (character mapping, diacritics removal, digit conversion, zero-width chars).
+   - Save cleaned subset.
 
-https://www.kaggle.com/datasets/amirzenoozi/persian-news-dataset/
+2. **Chunking**:
+   - Combine title + body.
+   - Split into chunks of ~800 characters (with overlap handling for long texts).
 
--- با `pandas` آن را بخوانید.
+3. **Indexing**:
+   - **Lexical**: BM25 on tokenized chunks.
+   - **Semantic**: Embeddings via `paraphrase-multilingual-MiniLM-L12-v2` + FAISS inner-product index.
 
--- یک **زیرمجموعه‌ی کوچک** بسازید (مثلاً ۱۰–۲۰ هزار خبر یا فقط چند `Category` خاص).
+4. **Retrieval**:
+   - `lexical`: Pure BM25.
+   - `semantic`: Dense vector search.
+   - `hybrid`: Top-20 BM25 → rerank with cosine similarity (top-5).
 
--- متن‌ها را کمی تمیز و نرمال‌سازی کنید.
+5. **Generation**:
+   - Retrieved chunks concatenated as context.
+   - Prompted to Groq's Llama-3.1-8B with a system prompt enforcing Persian, concise, and faithful answers.
 
--- زیرمجموعه را در `data/processed/news_subset.csv` ذخیره کنید.
+## Evaluation Results
 
----
+Tested on 15 questions with known ground-truth document IDs.
 
-### قدم ۲: ساخت RAG ساده
+| Method   | Successful Reference Retrieval (out of 15) |
+|----------|--------------------------------------------|
+| Lexical (BM25)     | 15                                         |
+| Semantic           | 10                                         |
+| Hybrid             | 13                                         |
 
-نوت‌بوک: `notebooks/02_build_rag_baseline.ipynb`
+BM25 performed best on this keyword-rich Persian news dataset, while hybrid offered a strong balance.
 
-در این نوت‌بوک باید:
+**Note**: The example query in notebook-2 ("سرمربی تیم بارسلونا کیه؟") returns "Ronald Koeman" because the retrieved articles are from 2021. In reality (as of January 2026), the current Barcelona head coach is **Hansi Flick**.
 
---  داده‌ی `news_subset.csv` را بخوانید.
+## Usage
 
---  خبرها را به **chunk**‌های کوچکتر تقسیم کنید.
+1. Run `rag-project-notebook-1.ipynb` to generate `news_subset.csv` (if starting from full dataset).
+2. Run `rag-project-notebook-2.ipynb` to build indexes and test queries.
+3. Modify the `answer()` function with your own Groq API key (store via Kaggle Secrets or environment variable).
 
---  برای هر chunk سه حالت **Embedding** بسازید:
+Example query:
 
-۱- استفاده از یک مدل semantic embedding دلخواه،  
-۲- استفاده از یک مدل lexical embedding دلخواه،  
-۳- ترکیب دو مدل فوق با روش دلخواه.  
+```python
+response, doc_ids, chunks = answer("سوال شما به زبان پارسی", 'hybrid')
+print(response)
+```
 
---  با استفاده از **FAISS** اندیس‌های برداری را بسازید.
+## Future Improvements
 
--- یک تابع بنویسید که:
-   - یک سوال فارسی را بگیرد،
-   - آن را embed کند،
-   - چند chunk برتر را در ۳ حالت مختلف از FAISS بازیابی کند،
-   - پرامپت مناسبی که شما طراحی کرده‌اید و چانک‌های بازیابی شده برای ورودی مدل را آماده کند،
-   - با استفاده از مدل زبانی بزرگ دلخواه، یک «پاسخ» ساده تولید کند.
+- Use Persian-specific embedding models (e.g., fine-tuned on Persian data).
+- Advanced reranking (e.g., cross-encoder).
+- Larger evaluation set with automated metrics (BLEU, ROUGE, BERTScore).
+- Deployment as a web API (e.g., with FastAPI or Gradio).
+- Support for longer context LLMs.
 
----
+## License
 
-### قدم ۳: ارزیابی و گزارش
-
-نوت‌بوک: `notebooks/03_evaluate_and_report.ipynb`
-
-در این نوت‌بوک باید:
-
--- یک فایل سوال دستی (حداقل ۱۵ سوال) در `evaluation/questions_template.jsonl` تکمیل کنید.
-
--- سیستم RAG خود را روی این سوال‌ها در ۳ حالت بازیابی اجرا کنید.
-
--- ببینید برای چند سوال:
-
-   - مدرک مناسب در top-k پیدا می‌شود،
-   - پاسخ شما از نظر خودتان درست است.
-
--- چند مثال خوب و چند مثال بد را نشان دهید.
-
--- برای هر ۳ حالت بازیابی این مراحل را طی کنید و عملکرد آن‌ها را مقایسه کنید.
-
--- خلاصه‌ای از نتایج و محدودیت‌ها را بنویسید (می‌توانید همین متن را بعداً در گزارش نهایی استفاده کنید).
-
----
-
-## ۴. فایل‌های مهم
-
-۱.۴  مسیر `data/raw/`  
-  جایی که **فایل اصلی Kaggle** را می‌گذارید (مثلاً `persian_news.csv`).
-
-۲.۴  مسیر `data/processed/news_subset.csv`  
-  زیرمجموعه‌ی کوچک شما.
-
-۳.۴  مسیر `evaluation/questions_template.jsonl`  
-  فایل سوال‌ها و پاسخ‌های مرجع شما.
-
-۴.۴  نوت‌بوک‌ها در `notebooks/`  
-  تمام پیاده‌سازی‌ها اینجاست.
-
-۵.۴  مسیر `docs/assignment.md`  
-  توضیح کامل پروژه به فارسی.
+MIT License – feel free to use, modify, and share.
 
 ---
 
-## ۵. تحویل در GitHub
-
-هنگام تحویل پروژه، حتماً موارد زیر را در GitHub داشته باشید:
-
-- نوت‌بوک‌های پر شده (بدون TODO)
-- فایل `data/processed/news_subset.csv` (اگر خیلی بزرگ نیست) یا توضیح واضح مسیر ساخت آن
-- فایل کامل شده‌ی `evaluation/questions_template.jsonl`
-- گزارش PDF / Markdown (در پوشه‌ی `docs/`)
-
-موفق باشید 🌱
+Built as an exploration of RAG techniques on non-English (Persian) news data. Contributions welcome!
